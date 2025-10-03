@@ -13,12 +13,14 @@
     {
       "name": "create-work-item",
       "title": "Create Work Item",
+      "subtitle": "Plane",
       "description": "Create a new work item",
       "mode": "view"
     },
     {
       "name": "search-work-items",
       "title": "Search Work Items",
+      "subtitle": "Plane",
       "description": "Search work items across projects",
       "mode": "view"
     }
