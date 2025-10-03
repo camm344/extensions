@@ -1,6 +1,7 @@
 # Plane Changelog
 
-## [Initial Version] - 2025-01-28
+## [Initial Version] - {PR_MERGE_DATE}
+
 ### Added
 - **Create Work Items**: Ability to create new work items with title, description, and assignee
 - **Search Work Items**: Search functionality to find work items across projects and workspaces
