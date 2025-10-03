@@ -93,6 +93,4 @@ When viewing work items, you can use these keyboard shortcuts:
 - `WorkItemActions` - Quick action menus
 - `SearchWorkItems` - Global search interface
 
-
-
 Made with ❤️ for the Plane community
