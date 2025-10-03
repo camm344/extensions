@@ -16,7 +16,7 @@ export async function getCycles({ projectId, cursor }: { projectId: string; curs
   });
   return {
     data: response?.results || [],
-    hasMore: response?.nextCursor ? true : false,
+    hasMore: !!response?.nextCursor,
     cursor: response?.nextCursor,
   };
 }

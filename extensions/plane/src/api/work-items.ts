@@ -26,7 +26,7 @@ export async function searchWorkItems({
   workspaceSearch = false,
 }: {
   searchText: string;
-  projectId?: string | undefined;
+  projectId?: string;
   limit?: number;
   workspaceSearch?: boolean;
 }): Promise<IssueSearchItem[]> {

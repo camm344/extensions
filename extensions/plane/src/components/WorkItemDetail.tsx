@@ -23,9 +23,7 @@ export default function WorkItemDetail({ slug, projectId, workItemId, mutateWork
   const { states, isLoading: isLoadingStates } = useStates(projectId, { execute: !!projectId });
   const { data: workItem, isLoading: isLoadingWorkItem, mutate } = useWorkItemDetail(workItemId, projectId);
 
-  let markdown = `
-  # ${workItem?.name}
-  `;
+  let markdown = `# ${workItem?.name}`;
 
   if (workItem?.descriptionHtml) {
     const descriptionMarked = parseHtmlToMarkdown(workItem.descriptionHtml);

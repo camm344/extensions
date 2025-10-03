@@ -45,7 +45,6 @@ export default function CreateWorkItemForm(props: CreateWorkItemFormProps) {
       });
       try {
         const htmlDescription = await parseMarkdownToHtml(values.descriptionHtml || "");
-        console.log("htmlDescription", htmlDescription);
         // create the issue
         const workItem = await createWorkItem(values.projectId, {
           name: values.name,
