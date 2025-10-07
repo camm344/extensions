@@ -193,7 +193,8 @@
     "typescript": "^5.4.5"
   },
   "platforms": [
-    "Windows"
+    "Windows",
+    "macOS"
   ],
   "scripts": {
     "build": "ray build -e dist",
