@@ -245,7 +245,7 @@ async function checkHashCache(noteId: string): Promise<{ path: string; hash: str
     const { getNoteBodyHashSync } = await import("./applescript");
     const { environment } = await import("@raycast/api");
     const { join } = await import("path");
-    const { existsSync, statSync, mkdirSync } = await import("fs");
+    const { existsSync, statSync, mkdirSync, utimesSync } = await import("fs");
 
     debugLog("Getting note content hash...");
     const startHash = Date.now();
@@ -267,6 +267,15 @@ async function checkHashCache(noteId: string): Promise<{ path: string; hash: str
     if (existsSync(cachedHtmlPath)) {
       const stats = statSync(cachedHtmlPath);
       debugLog(`✅ Cache HIT! Using cached file (${(stats.size / 1024).toFixed(1)}KB)`);
+      
+      // Touch file to update mtime for LRU (true Least Recently Used)
+      const now = new Date();
+      try {
+        utimesSync(cachedHtmlPath, now, now);
+      } catch {
+        // Ignore touch errors
+      }
+      
       return { path: cachedHtmlPath, hash: contentHash };
     }
 

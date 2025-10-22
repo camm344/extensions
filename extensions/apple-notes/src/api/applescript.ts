@@ -63,21 +63,34 @@ export async function getNoteBody(id: string) {
     `);
 }
 
+/**
+ * Gets a lightweight hash for cache invalidation based on note ID + modification time
+ * This is MUCH faster than hashing the entire note content (instant vs 1-10s)
+ * @param id - Note ID
+ * @returns MD5 hash of id+modTime or null if failed
+ */
 export function getNoteBodyHashSync(id: string): string | null {
   const { execSync } = require("child_process");
+  const crypto = require("crypto");
 
   try {
+    // Get modification date from Notes (very fast - no content transfer!)
     const script = `tell application "Notes"
   set theNote to note id "${id}"
-  return body of theNote
+  return (modification date of theNote) as string
 end tell`;
 
-    // Pipe AppleScript output directly to md5 (use full path for reliability)
-    const hash = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}' | /sbin/md5 -q`, {
+    const modDateStr = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}' 2>/dev/null`, {
       encoding: "utf-8",
-      maxBuffer: 1024 * 1024, // 1MB buffer for hash output
+      maxBuffer: 1024, // Only need timestamp
     }).trim();
 
+    // Create hash from ID + modification time (instant)
+    // If note content changes, mod time changes, hash changes
+    const hashInput = `${id}:${modDateStr}`;
+    const hash = crypto.createHash("md5").update(hashInput).digest("hex");
+
+    debugLog(`Fast hash: ${hash.substring(0, 8)}... (id+modtime)`);
     return hash;
   } catch (error) {
     debugLog(`Failed to get note body hash: ${error}`);

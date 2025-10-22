@@ -17,6 +17,104 @@ import { NodeHtmlMarkdown } from "node-html-markdown";
 
 import { debugLog } from "./logger";
 
+// Cache metadata for fast size tracking
+interface CacheMetadata {
+  totalSize: number;
+  fileCount: number;
+  lastUpdated: string;
+}
+
+const CACHE_META_FILE = ".cache-meta.json";
+
+/**
+ * Reads cache metadata from disk
+ */
+function readCacheMetadata(): CacheMetadata | null {
+  try {
+    const metaPath = join(environment.supportPath, CACHE_META_FILE);
+    if (!existsSync(metaPath)) {
+      return null;
+    }
+    const data = readFileSync(metaPath, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes cache metadata to disk
+ */
+function writeCacheMetadata(meta: CacheMetadata): void {
+  try {
+    const metaPath = join(environment.supportPath, CACHE_META_FILE);
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), "utf-8");
+  } catch (error) {
+    debugLog(`Failed to write cache metadata: ${error}`);
+  }
+}
+
+/**
+ * Updates cache metadata when adding a file
+ */
+function incrementCacheMetadata(fileSize: number): void {
+  const meta = readCacheMetadata() || { totalSize: 0, fileCount: 0, lastUpdated: new Date().toISOString() };
+  meta.totalSize += fileSize;
+  meta.fileCount += 1;
+  meta.lastUpdated = new Date().toISOString();
+  writeCacheMetadata(meta);
+}
+
+/**
+ * Recalculates cache metadata by scanning all files (expensive, only when needed)
+ */
+function recalculateCacheMetadata(): CacheMetadata {
+  const noteCacheDir = join(environment.supportPath, "note-cache");
+  const imageCacheDir = join(environment.supportPath, "image-cache");
+
+  let totalSize = 0;
+  let fileCount = 0;
+
+  // Scan note cache
+  if (existsSync(noteCacheDir)) {
+    const noteFiles = readdirSync(noteCacheDir);
+    for (const file of noteFiles) {
+      if (!file.endsWith(".html")) continue;
+      try {
+        const stats = statSync(join(noteCacheDir, file));
+        totalSize += stats.size;
+        fileCount++;
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  // Scan image cache
+  if (existsSync(imageCacheDir)) {
+    const imageFiles = readdirSync(imageCacheDir);
+    for (const file of imageFiles) {
+      if (!file.endsWith(".jpg")) continue;
+      try {
+        const stats = statSync(join(imageCacheDir, file));
+        totalSize += stats.size;
+        fileCount++;
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  const meta: CacheMetadata = {
+    totalSize,
+    fileCount,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  writeCacheMetadata(meta);
+  return meta;
+}
+
 export const fileIcon = "/System/Applications/Notes.app";
 
 export function escapeDoubleQuotes(value: string) {
@@ -1192,6 +1290,10 @@ async function saveToHashCache(contentHash: string, processedHtmlPath: string): 
     const cachedHtmlPath = join(cacheDir, `${contentHash}.html`);
     copyFileSync(processedHtmlPath, cachedHtmlPath);
 
+    // Update cache metadata with new file size
+    const stats = statSync(cachedHtmlPath);
+    incrementCacheMetadata(stats.size);
+
     debugLog(`💾 Saved processed HTML to cache: ${contentHash.substring(0, 8)}...`);
 
     // Cleanup old cache entries if needed (non-blocking)
@@ -1210,6 +1312,27 @@ async function cleanupCacheIfNeeded(): Promise<void> {
   try {
     const CACHE_LIMIT_MB = 75;
     const CACHE_LIMIT_BYTES = CACHE_LIMIT_MB * 1024 * 1024;
+
+    // Quick check using metadata (instant!)
+    let meta = readCacheMetadata();
+    
+    // If no metadata or very outdated (>7 days), recalculate
+    if (!meta || (new Date().getTime() - new Date(meta.lastUpdated).getTime() > 7 * 24 * 60 * 60 * 1000)) {
+      debugLog("📊 Recalculating cache metadata...");
+      meta = recalculateCacheMetadata();
+    }
+
+    const totalSizeMB = meta.totalSize / (1024 * 1024);
+    const totalSizeKB = meta.totalSize / 1024;
+    const sizeDisplay = totalSizeMB < 1 ? `${totalSizeKB.toFixed(0)}KB` : `${totalSizeMB.toFixed(1)}MB`;
+
+    debugLog(`📊 Cache size: ${sizeDisplay} (${meta.fileCount} files, limit: ${CACHE_LIMIT_MB}MB)`);
+
+    if (meta.totalSize <= CACHE_LIMIT_BYTES) {
+      return; // Under limit, no cleanup needed
+    }
+
+    debugLog(`🧹 Cache over limit, starting cleanup...`);
 
     const noteCacheDir = join(environment.supportPath, "note-cache");
     const imageCacheDir = join(environment.supportPath, "image-cache");
@@ -1261,20 +1384,6 @@ async function cleanupCacheIfNeeded(): Promise<void> {
       }
     }
 
-    // Calculate total size
-    const totalSize = cacheFiles.reduce((sum, file) => sum + file.size, 0);
-    const totalSizeMB = totalSize / (1024 * 1024);
-    const totalSizeKB = totalSize / 1024;
-
-    // Show KB for small caches, MB for large
-    const sizeDisplay = totalSizeMB < 1 ? `${totalSizeKB.toFixed(0)}KB` : `${totalSizeMB.toFixed(1)}MB`;
-
-    debugLog(`📊 Cache size: ${sizeDisplay} (limit: ${CACHE_LIMIT_MB}MB)`);
-
-    if (totalSize <= CACHE_LIMIT_BYTES) {
-      return; // Under limit, no cleanup needed
-    }
-
     // Sort by modification time (oldest first)
     cacheFiles.sort((a, b) => a.mtime.getTime() - b.mtime.getTime());
 
@@ -1284,7 +1393,7 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     const htmlHashesToDelete = new Set<string>();
 
     for (const file of cacheFiles) {
-      if (totalSize - deletedSize <= CACHE_LIMIT_BYTES) {
+      if (meta.totalSize - deletedSize <= CACHE_LIMIT_BYTES) {
         break; // Reached target size
       }
 
@@ -1330,6 +1439,12 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     debugLog(
       `✨ Cache cleanup complete: deleted ${deletedCount} files, freed ${(deletedSize / (1024 * 1024)).toFixed(1)}MB`,
     );
+
+    // Update metadata after cleanup
+    meta.totalSize -= deletedSize;
+    meta.fileCount -= deletedCount;
+    meta.lastUpdated = new Date().toISOString();
+    writeCacheMetadata(meta);
   } catch (error) {
     debugLog(`Cache cleanup error: ${error}`);
     // Non-fatal

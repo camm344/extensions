@@ -2,13 +2,9 @@ import { environment, getPreferenceValues } from "@raycast/api";
 import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from "fs";
 import { join, dirname } from "path";
 
-interface Preferences {
-  enableDebugLogging: boolean;
-}
-
 const logFile = join(environment.supportPath, "debug.log");
-const MAX_LOG_SIZE_MB = 2; // Keep log under 2MB
-const MAX_LOG_LINES = 1000; // Keep last 1000 lines max
+const MAX_LOG_SIZE_MB = 2;
+const MAX_LOG_LINES = 1000;
 
 // Initialize log file on first load if logging is enabled
 let logInitialized = false;
@@ -74,7 +70,7 @@ function rotateLogIfNeeded() {
       writeFileSync(logFile, rotatedContent);
     }
   } catch (error) {
-    // Silently fail
+    debugLog(`Failed to rotate log: ${error}`);
   }
 }
 
@@ -85,7 +81,7 @@ export function debugLog(message: string) {
   try {
     const preferences = getPreferenceValues<Preferences>();
     if (!preferences.enableDebugLogging) {
-      return; // Skip logging if disabled
+      return;
     }
 
     if (!logInitialized) {
@@ -97,12 +93,11 @@ export function debugLog(message: string) {
 
     writeFileSync(logFile, logMessage, { flag: "a" });
 
-    // Check if we need to rotate (every 10 log calls)
     if (Math.random() < 0.1) {
       rotateLogIfNeeded();
     }
   } catch (error) {
-    // Silently fail - don't break the extension if logging fails
+    debugLog(`Failed to log message: ${error}`);
   }
 }
 
