@@ -1,6 +1,12 @@
+import { spawnSync } from "child_process";
+import { writeFileSync, unlinkSync, openSync, closeSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+
 import { runAppleScript } from "@raycast/utils";
 
 import { escapeDoubleQuotes } from "../helpers";
+import { debugLog } from "../logger";
 
 export async function createNote(text?: string) {
   const escapedText = text ? escapeDoubleQuotes(text) : "";
@@ -57,6 +63,91 @@ export async function getNoteBody(id: string) {
     `);
 }
 
+export function getNoteBodyHashSync(id: string): string | null {
+  const { execSync } = require("child_process");
+
+  try {
+    const script = `tell application "Notes"
+  set theNote to note id "${id}"
+  return body of theNote
+end tell`;
+
+    // Pipe AppleScript output directly to md5 (use full path for reliability)
+    const hash = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}' | /sbin/md5 -q`, {
+      encoding: "utf-8",
+      maxBuffer: 1024 * 1024, // 1MB buffer for hash output
+    }).trim();
+
+    return hash;
+  } catch (error) {
+    debugLog(`Failed to get note body hash: ${error}`);
+    return null;
+  }
+}
+
+export function getNoteBodyToFileSync(id: string): string {
+  const tempFile = join(tmpdir(), `raycast-note-${Date.now()}.html`);
+  debugLog(`tempFile: ${tempFile}`);
+  const scriptFile = join(tmpdir(), `raycast-script-${Date.now()}.scpt`);
+
+  // Write AppleScript to a file to avoid command-line escaping issues
+  const script = `tell application "Notes"
+  set theNote to note id "${escapeDoubleQuotes(id)}"
+  return body of theNote
+end tell`;
+
+  try {
+    writeFileSync(scriptFile, script, "utf-8");
+
+    // Open file descriptor for writing
+    const fd = openSync(tempFile, "w");
+
+    try {
+      // Spawn osascript and pipe its stdout directly to file descriptor
+      // This streams the data without loading it all into memory!
+      const result = spawnSync("osascript", [scriptFile], {
+        stdio: ["ignore", fd, "pipe"], // pipe stdout to file descriptor
+        maxBuffer: 100 * 1024 * 1024, // 100MB max
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.status !== 0) {
+        const errorMsg = result.stderr?.toString() || "Unknown error";
+        throw new Error(`osascript failed: ${errorMsg}`);
+      }
+    } finally {
+      // Always close the file descriptor
+      closeSync(fd);
+    }
+
+    // Clean up script file
+    try {
+      unlinkSync(scriptFile);
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    debugLog(tempFile);
+    return tempFile;
+  } catch (error) {
+    // Clean up on error
+    try {
+      unlinkSync(tempFile);
+    } catch {
+      // Ignore cleanup errors
+    }
+    try {
+      unlinkSync(scriptFile);
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
+}
+
 export async function getNotePlainText(id: string) {
   return runAppleScript(`
     tell application "Notes"
@@ -87,4 +178,40 @@ export async function getSelectedNote() {
       end if
     end tell
   `);
+}
+
+/**
+ * Gets the note body and saves it directly to a temp file
+ * This avoids loading large content into memory
+ * @param id - Note ID
+ * @returns Path to the temporary file containing the note body
+ */
+export async function getNoteBodyToFile(id: string): Promise<string> {
+  const tempFilePath = join(tmpdir(), `raycast-note-${Date.now()}.html`);
+  debugLog(`tempFilePath: ${tempFilePath}`);
+
+  try {
+    // First, try to get the note body normally
+    // We'll check the size after getting it
+    const content = await runAppleScript(`
+      tell application "Notes"
+        set theNote to note id "${escapeDoubleQuotes(id)}"
+        return body of theNote
+      end tell
+    `);
+
+    // Write to file using Node.js - more reliable than AppleScript shell script
+    writeFileSync(tempFilePath, content, "utf-8");
+
+    return tempFilePath;
+  } catch (error) {
+    // If AppleScript fails, it might be because the note is too large
+    // Try to handle it gracefully
+    if (error instanceof Error && error.message.includes("100013")) {
+      throw new Error(
+        "This note is too large to load from Apple Notes.\n\nPlease try opening it directly in the Apple Notes app instead.",
+      );
+    }
+    throw error;
+  }
 }

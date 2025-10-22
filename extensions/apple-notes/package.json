@@ -138,10 +138,15 @@
       "name": "update-note",
       "title": "Update Note",
       "description": "Update the content of a specific note in Apple Notes."
+    },
+    {
+      "name": "get-debug-log",
+      "title": "Get Debug Log",
+      "description": "Get the latest debug log entries to troubleshoot issues with note loading, caching, or image processing. Use this when investigating why a note failed to load or took a long time to process."
     }
   ],
   "ai": {
-    "instructions": "- Always format note titles as Markdown links using the note's URL.\\n- If you can't access the Apple Notes database, tell the user he needs to give Raycast the full disk access permission in the system settings. Be detailed about the steps.",
+    "instructions": "- Always format note titles as Markdown links using the note's URL.\\n- If you can't access the Apple Notes database, tell the user he needs to give Raycast the full disk access permission in the system settings. Be detailed about the steps.\\n- If a user reports issues with note loading (slow, crashes, or errors), use the get-debug-log tool to investigate what happened during processing.",
     "evals": [
       {
         "input": "@apple-notes what's on my grocery list",
@@ -351,6 +356,27 @@
             }
           }
         ]
+      },
+      {
+        "input": "@apple-notes What went wrong with my notes?",
+        "mocks": {
+          "get-debug-log": {
+            "fileSize": "1 KB",
+            "log": "=== Apple Notes Debug Log ===\n2025-10-22T15:13:46.091Z\nSession started\n\n[17.13.46] Loading note body: 2025-10-22T15:13:46.091Z\n[17.13.46] Loading note body: 2025-10-22T15:13:46.099Z\n[17.13.46] Loading note as file: 0.00MB compressed\n[17.13.46] Getting note content hash...\n[17.13.46] Hash computed in 162ms: 58dbed2b...\n[17.13.46] Cache MISS - will export and process\n[17.13.46] tempFile: /var/folders/t4/03yc80110dd2yy1wxvhbcd5r0000gn/T/raycast-note-1761146026443.html\n[17.13.46] /var/folders/t4/03yc80110dd2yy1wxvhbcd5r0000gn/T/raycast-note-1761146026443.html\n[17.13.46] Processing note file: 0.00MB\n[17.13.46] Small note (0.00MB), extracting images to files\n[17.13.46] Extracted 0 images to disk\n[17.13.46] 💾 Saved processed HTML to cache: 58dbed2b...\n[17.13.46] 📊 Cache size: 278KB (limit: 75MB)\n[17.13.46] Loading note as file: 0.00MB compressed\n[17.13.46] Getting note content hash...\n[17.13.46] Hash computed in 119ms: 58dbed2b...\n[17.13.46] ✅ Cache HIT! Using cached file (0.1KB)\n[17.13.46] Small note (0.00MB), extracting images to files\n[17.13.46] Small note (0.00MB), extracting images to files\n[17.13.46] Extracted 0 images to disk\n",
+            "logPath": "/Users/johndoe/Library/Application Support/com.raycast.macos/extensions/apple-notes/debug.log",
+            "message": "Found debug log with 25 total lines. Showing last 100 lines:",
+            "status": "success",
+            "totalLines": 25
+          }
+        },
+        "expected": [
+          {
+            "callsTool": {
+              "arguments": {},
+              "name": "get-debug-log"
+            }
+          }
+        ]
       }
     ]
   },
@@ -387,6 +413,15 @@
       "label": "Show checklist status",
       "description": "Show a checklist icon with its status next to each note",
       "required": false
+    },
+    {
+      "name": "enableDebugLogging",
+      "type": "checkbox",
+      "required": false,
+      "default": false,
+      "label": "Enable debug logging",
+      "title": "Debug Logging",
+      "description": "Log detailed processing information to a file for troubleshooting (~/Library/Application Support/.../debug.log)"
     },
     {
       "name": "links",
