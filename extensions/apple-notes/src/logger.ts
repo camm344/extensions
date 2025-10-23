@@ -1,6 +1,7 @@
-import { environment, getPreferenceValues } from "@raycast/api";
 import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from "fs";
 import { join, dirname } from "path";
+
+import { environment, getPreferenceValues } from "@raycast/api";
 
 const logFile = join(environment.supportPath, "debug.log");
 const MAX_LOG_SIZE_MB = 2;

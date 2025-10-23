@@ -3,12 +3,19 @@ import crypto from "crypto";
 import fs, { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync } from "fs";
 import os, { tmpdir } from "os";
 import path, { join } from "path";
+
 import { environment } from "@raycast/api";
 import { NodeHtmlMarkdown } from "node-html-markdown";
+
 import { debugLog } from "./logger";
-import { CacheMetadata } from "./interfaces";
 
 const CACHE_META_FILE = ".cache-meta.json";
+
+interface CacheMetadata {
+  totalSize: number;
+  fileCount: number;
+  lastUpdated: string;
+}
 
 function readCacheMetadata(): CacheMetadata | null {
   try {
@@ -85,6 +92,23 @@ function recalculateCacheMetadata(): CacheMetadata {
 
   writeCacheMetadata(meta);
   return meta;
+}
+
+function computeFileMd5(filePath: string): string {
+  const hash = crypto.createHash("md5");
+  const buffer = new Uint8Array(256 * 1024); // 256KB chunks to stay memory-friendly
+  const fd = fs.openSync(filePath, "r");
+
+  try {
+    let bytesRead = 0;
+    while ((bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  return hash.digest("hex");
 }
 
 export const fileIcon = "/System/Applications/Notes.app";
@@ -208,110 +232,6 @@ export function stripLargeImagesFromHtml(htmlContent: string): string {
 }
 
 /**
- * Extracts base64 images from HTML file, resizes them using sips, and replaces them with smaller versions
- * This processes the file directly to avoid loading large content into memory
- * @param filePath - Path to HTML file
- * @returns Path to processed HTML file with resized images
- */
-export function extractAndResizeImagesInFile(filePath: string): string {
-  const tempDir = path.join(environment.supportPath, "temp-images");
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-
-  try {
-    // Read file in chunks to find and extract images
-    const content = fs.readFileSync(filePath, "utf-8");
-
-    // Quick check - if no images, return original
-    if (!content.includes("data:image")) {
-      return filePath;
-    }
-
-    let imageCounter = 0;
-    const maxImages = 20; // Conservative limit
-    const maxImageSize = 800; // Max width/height in pixels
-
-    // Process images using regex but only extract and resize
-    const processedContent = content.replace(
-      /<img([^>]*)src=["']data:image\/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/=]+)["']([^>]*)>/gi,
-      (match, beforeSrc, imageType, base64Data, afterSrc) => {
-        imageCounter++;
-
-        if (imageCounter > maxImages) {
-          return `<p><em>🖼️ [Image ${imageCounter} - Too many images]</em></p>`;
-        }
-
-        try {
-          // Estimate size
-          const base64Length = base64Data.length;
-          const approximateSizeKB = (base64Length * 0.75) / 1024;
-
-          // Skip very small images (< 50KB) - keep them as-is
-          if (approximateSizeKB < 50) {
-            return match;
-          }
-
-          // Decode base64 to a temp file
-          const timestamp = Date.now();
-          const tempInputPath = path.join(tempDir, `input-${timestamp}-${imageCounter}.${imageType}`);
-          const tempOutputPath = path.join(tempDir, `output-${timestamp}-${imageCounter}.${imageType}`);
-
-          // Write base64 to file
-          const imageBuffer = Buffer.from(base64Data, "base64");
-          fs.writeFileSync(tempInputPath, new Uint8Array(imageBuffer));
-
-          // Use sips to resize the image
-          try {
-            execSync(
-              `sips -Z ${maxImageSize} "${tempInputPath}" --out "${tempOutputPath}" 2>/dev/null`,
-              { timeout: 5000 }, // 5 second timeout per image
-            );
-
-            // Read the resized image and convert back to base64
-            const resizedBuffer = fs.readFileSync(tempOutputPath);
-            const resizedBase64 = resizedBuffer.toString("base64");
-
-            // Clean up temp files
-            fs.unlinkSync(tempInputPath);
-            fs.unlinkSync(tempOutputPath);
-
-            // Return img tag with smaller base64
-            const newSizeKB = ((resizedBase64.length * 0.75) / 1024).toFixed(1);
-            debugLog(`Resized image ${imageCounter}: ${approximateSizeKB.toFixed(1)}KB → ${newSizeKB}KB`);
-
-            return `<img${beforeSrc} src="data:image/${imageType};base64,${resizedBase64}"${afterSrc}>`;
-          } catch (sipsError) {
-            // If sips fails, clean up and use placeholder
-            try {
-              fs.unlinkSync(tempInputPath);
-              if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
-            } catch {
-              // Ignore cleanup errors
-            }
-
-            return `<p><em>🖼️ [${imageType.toUpperCase()} Image - ${approximateSizeKB.toFixed(1)}KB - Could not resize]</em></p>`;
-          }
-        } catch (error) {
-          debugLog(`Failed to process image ${imageCounter}: ${error}`);
-          return `<p><em>🖼️ [Image ${imageCounter} - Processing failed]</em></p>`;
-        }
-      },
-    );
-
-    // Write processed content to a new temp file
-    const processedFilePath = filePath.replace(".html", "-processed.html");
-    fs.writeFileSync(processedFilePath, processedContent, "utf-8");
-
-    return processedFilePath;
-  } catch (error) {
-    debugLog(`Failed to process images in file: ${error}`);
-    // Return original file if processing fails
-    return filePath;
-  }
-}
-
-/**
  * Cleans up old temporary image files to prevent disk space issues
  * Removes images older than 1 hour
  */
@@ -398,8 +318,7 @@ export function processImagesWithShellScript(inputPath: string, outputPath: stri
   }
 
   // Compute hash of input HTML file
-  const htmlContent = readFileSync(inputPath, "utf-8");
-  const htmlHash = crypto.createHash("md5").update(htmlContent).digest("hex");
+  const htmlHash = computeFileMd5(inputPath);
 
   // Check if cached images exist for this exact HTML
   const cachePrefix = `${htmlHash}-`;
@@ -450,19 +369,15 @@ done < "$INPUT"
         encoding: "utf-8",
       });
 
-      // Update metadata for cached images (they exist but weren't counted)
+      // Ensure cache metadata exists for LRU cleanup – but avoid double-counting on repeat hits
       try {
-        const imageFiles = readdirSync(cacheDir);
-        const cachedImages = imageFiles.filter((file) => file.startsWith(cachePrefix) && file.endsWith(".jpg"));
-        
-        for (const imageFile of cachedImages) {
-          const imagePath = join(cacheDir, imageFile);
-          const stats = statSync(imagePath);
-          incrementCacheMetadata(stats.size);
-          debugLog(`📊 Added cached image to metadata: ${imageFile} (${(stats.size / 1024).toFixed(1)}KB)`);
+        const meta = readCacheMetadata();
+        if (!meta || meta.fileCount === 0) {
+          debugLog("📊 Cache metadata missing or empty, recalculating after cache hit...");
+          recalculateCacheMetadata();
         }
       } catch (error) {
-        debugLog(`Failed to update cached image metadata: ${error}`);
+        debugLog(`Failed to refresh cache metadata on cache hit: ${error}`);
       }
 
       fs.unlinkSync(scriptPath);
@@ -1072,7 +987,7 @@ export async function convertHtmlFileToMarkdownSafely(filePath: string, contentH
       try {
         // Use shell script - completely bypasses Node.js memory limits!
         // 450px JPEG 20% for speed and small files
-        await processImagesWithShellScript(filePath, tempProcessedFile, 450);
+        processImagesWithShellScript(filePath, tempProcessedFile, 450);
 
         // Check processed file size
         const processedStats = statSync(tempProcessedFile);
@@ -1106,7 +1021,7 @@ export async function convertHtmlFileToMarkdownSafely(filePath: string, contentH
         const processedHtml = readFileSync(tempProcessedFile, "utf-8");
 
         // Convert to markdown with simple conversion (keep file:// URLs)
-        let markdown = processedHtml
+        const markdown = processedHtml
           // Convert div tags to newlines for proper spacing
           .replace(/<div>/gi, "\n")
           .replace(/<\/div>/gi, "\n")

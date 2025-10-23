@@ -1,5 +1,6 @@
-import { spawnSync } from "child_process";
-import { writeFileSync, unlinkSync, openSync, closeSync } from "fs";
+import { execSync, spawnSync } from "child_process";
+import crypto from "crypto";
+import { closeSync, openSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -70,9 +71,6 @@ export async function getNoteBody(id: string) {
  * @returns MD5 hash of id+modTime or null if failed
  */
 export function getNoteBodyHashSync(id: string): string | null {
-  const { execSync } = require("child_process");
-  const crypto = require("crypto");
-
   try {
     // Get modification date from Notes (very fast - no content transfer!)
     const script = `tell application "Notes"

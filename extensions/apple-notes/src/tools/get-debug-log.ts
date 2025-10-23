@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, statSync } from "fs";
-import { getLogFilePath } from "../logger";
+
 import { getPreferenceValues } from "@raycast/api";
+
+import { getLogFilePath } from "../logger";
 
 /**
  * AI Tool: Get the latest debug log entries

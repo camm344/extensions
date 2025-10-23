@@ -1,5 +1,6 @@
 import { homedir } from "os";
 import { resolve } from "path";
+
 import { executeSQL } from "@raycast/utils";
 
 import { getOpenNoteURL } from "../helpers";
@@ -184,8 +185,6 @@ export async function getNoteBodyAsFile(
     if (!pkMatch) {
       return null;
     }
-    const pk = parseInt(pkMatch[1], 10);
-
     const size = await getNoteSize(noteId);
 
     if (size === null) {
