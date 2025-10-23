@@ -586,6 +586,27 @@ echo "END: $END - Processed $IMAGE_COUNT images in parallel" >&2
       debugLog("Shell script output:\n" + result.toString());
     }
 
+    // Update cache metadata with image files created by shell script
+    try {
+      const imageCacheDir = join(environment.supportPath, "image-cache");
+      if (existsSync(imageCacheDir)) {
+        const imageFiles = readdirSync(imageCacheDir);
+        const htmlHash = crypto.createHash("md5").update(readFileSync(inputPath, "utf-8")).digest("hex");
+        
+        // Find all images created for this HTML hash
+        const newImages = imageFiles.filter(file => file.startsWith(htmlHash) && file.endsWith(".jpg"));
+        
+        for (const imageFile of newImages) {
+          const imagePath = join(imageCacheDir, imageFile);
+          const stats = statSync(imagePath);
+          incrementCacheMetadata(stats.size);
+          debugLog(`📊 Added image to metadata: ${imageFile} (${(stats.size / 1024).toFixed(1)}KB)`);
+        }
+      }
+    } catch (error) {
+      debugLog(`Failed to update image metadata: ${error}`);
+    }
+
     // Clean up script
     try {
       fs.unlinkSync(scriptPath);
