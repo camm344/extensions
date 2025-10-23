@@ -13,11 +13,11 @@ module.exports = defineConfig([
         "error",
         {
           "newlines-between": "always",
-          "alphabetize": {
-            "order": "asc"
-          }
-        }
-      ]
-    }
-  }
+          alphabetize: {
+            order: "asc",
+          },
+        },
+      ],
+    },
+  },
 ]);

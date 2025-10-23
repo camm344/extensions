@@ -583,8 +583,8 @@ export async function resizeImagesInFileStreamingWithSips(
     let imgTagStartPos = 0; // Position of '<img'
     let base64StartPos = 0; // Position where base64 data actually starts (after "base64,")
 
-    readStream.on("data", (chunk: string) => {
-      buffer += chunk;
+    readStream.on("data", (chunk: string | Buffer) => {
+      buffer += chunk.toString();
       let writePos = 0;
       let searchPos = 0;
 
@@ -866,8 +866,8 @@ export async function stripImagesFromFileInChunks(inputPath: string, outputPath:
     let inDataImage = false;
     let skipUntil = "";
 
-    readStream.on("data", (chunk: string) => {
-      buffer += chunk;
+    readStream.on("data", (chunk: string | Buffer) => {
+      buffer += chunk.toString();
 
       let writePos = 0;
       let searchPos = 0;

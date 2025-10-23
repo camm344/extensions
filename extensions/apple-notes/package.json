@@ -497,7 +497,7 @@
     "eslint": "^9.22.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.2",
-    "eslint-plugin-import": "^2.29.1"
+    "eslint-plugin-import": "^2.30.0"
   },
   "scripts": {
     "build": "ray build -e dist",

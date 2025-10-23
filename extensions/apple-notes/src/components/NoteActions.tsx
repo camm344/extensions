@@ -191,7 +191,7 @@ export default function NoteActions({ noteTitles, note, isDeleted, isDetail, mut
         />
 
         <ActionPanel.Submenu
-          title="Copy Note Content As"
+          title="Copy Note Content as…"
           icon={Icon.Clipboard}
           shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
         >
