@@ -1,6 +1,5 @@
 import { homedir } from "os";
 import { resolve } from "path";
-
 import { executeSQL } from "@raycast/utils";
 
 import { getOpenNoteURL } from "../helpers";
@@ -267,7 +266,7 @@ async function checkHashCache(noteId: string): Promise<{ path: string; hash: str
     if (existsSync(cachedHtmlPath)) {
       const stats = statSync(cachedHtmlPath);
       debugLog(`✅ Cache HIT! Using cached file (${(stats.size / 1024).toFixed(1)}KB)`);
-      
+
       // Touch file to update mtime for LRU (true Least Recently Used)
       const now = new Date();
       try {
@@ -275,7 +274,7 @@ async function checkHashCache(noteId: string): Promise<{ path: string; hash: str
       } catch {
         // Ignore touch errors
       }
-      
+
       return { path: cachedHtmlPath, hash: contentHash };
     }
 

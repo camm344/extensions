@@ -1,34 +1,15 @@
 import { execSync } from "child_process";
 import crypto from "crypto";
-import fs, {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  unlinkSync,
-} from "fs";
+import fs, { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync } from "fs";
 import os, { tmpdir } from "os";
 import path, { join } from "path";
-
 import { environment } from "@raycast/api";
 import { NodeHtmlMarkdown } from "node-html-markdown";
-
 import { debugLog } from "./logger";
-
-// Cache metadata for fast size tracking
-interface CacheMetadata {
-  totalSize: number;
-  fileCount: number;
-  lastUpdated: string;
-}
+import { CacheMetadata } from "./interfaces";
 
 const CACHE_META_FILE = ".cache-meta.json";
 
-/**
- * Reads cache metadata from disk
- */
 function readCacheMetadata(): CacheMetadata | null {
   try {
     const metaPath = join(environment.supportPath, CACHE_META_FILE);
@@ -42,9 +23,6 @@ function readCacheMetadata(): CacheMetadata | null {
   }
 }
 
-/**
- * Writes cache metadata to disk
- */
 function writeCacheMetadata(meta: CacheMetadata): void {
   try {
     const metaPath = join(environment.supportPath, CACHE_META_FILE);
@@ -54,9 +32,6 @@ function writeCacheMetadata(meta: CacheMetadata): void {
   }
 }
 
-/**
- * Updates cache metadata when adding a file
- */
 function incrementCacheMetadata(fileSize: number): void {
   const meta = readCacheMetadata() || { totalSize: 0, fileCount: 0, lastUpdated: new Date().toISOString() };
   meta.totalSize += fileSize;
@@ -65,9 +40,6 @@ function incrementCacheMetadata(fileSize: number): void {
   writeCacheMetadata(meta);
 }
 
-/**
- * Recalculates cache metadata by scanning all files (expensive, only when needed)
- */
 function recalculateCacheMetadata(): CacheMetadata {
   const noteCacheDir = join(environment.supportPath, "note-cache");
   const imageCacheDir = join(environment.supportPath, "image-cache");
@@ -94,7 +66,7 @@ function recalculateCacheMetadata(): CacheMetadata {
   if (existsSync(imageCacheDir)) {
     const imageFiles = readdirSync(imageCacheDir);
     for (const file of imageFiles) {
-      if (!file.endsWith(".jpg")) continue;
+      if (!file.endsWith(".webp")) continue;
       try {
         const stats = statSync(join(imageCacheDir, file));
         totalSize += stats.size;
@@ -454,13 +426,13 @@ while IFS= read -r line; do
     IMAGE_COUNT=$((IMAGE_COUNT + 1))
     
     # Find cached file for this image index
-    CACHED_FILE="$CACHE_DIR/\${CACHE_PREFIX}img\${IMAGE_COUNT}.jpg"
+    CACHED_FILE="$CACHE_DIR/\${CACHE_PREFIX}img\${IMAGE_COUNT}.webp"
     
     if [ -f "$CACHED_FILE" ]; then
       # Extract everything before the <img tag
       BEFORE_IMG=$(echo "$line" | sed 's/<img.*//')
       # Store just the filename (not full path)
-      FILENAME="\${CACHE_PREFIX}img\${IMAGE_COUNT}.jpg"
+      FILENAME="\${CACHE_PREFIX}img\${IMAGE_COUNT}.webp"
       echo "\${BEFORE_IMG}<img src=\\"\${FILENAME}\\">" >> "$OUTPUT"
     else
       echo "<!-- Cached image $IMAGE_COUNT not found -->" >> "$OUTPUT"
@@ -524,7 +496,7 @@ while IFS= read -r line; do
       
       # Cache file based on HTML hash and image index
       TEMP_IN="$TEMP_DIR/raycast-shell-in-$IMAGE_COUNT.$IMAGE_TYPE"
-      TEMP_OUT="$CACHE_DIR/\${HTML_HASH}-img\${IMAGE_COUNT}.jpg"
+      TEMP_OUT="$CACHE_DIR/\${HTML_HASH}-img\${IMAGE_COUNT}.webp"
       
       START_DECODE=$(date +%s.%N)
       echo "$BASE64_DATA" | base64 -d > "$TEMP_IN" 2>/dev/null || {
@@ -538,9 +510,9 @@ while IFS= read -r line; do
       ORIG_SIZE=$(stat -f%z "$TEMP_IN" 2>/dev/null || echo "0")
       echo "  [$LINE_TIME] Decoded: $((ORIG_SIZE / 1024))KB in \${DECODE_TIME}s" >&2
       
-      # Resize with sips and convert to JPEG (20% quality for max speed)
+      # Resize with sips and convert to WebP (40% quality for better compression)
       START_RESIZE=$(date +%s.%N)
-      sips -Z "$MAX_WIDTH" -s format jpeg -s formatOptions $QUALITY "$TEMP_IN" --out "$TEMP_OUT" >/dev/null 2>&1 || {
+      sips -Z "$MAX_WIDTH" -s format webp -s formatOptions 40 "$TEMP_IN" --out "$TEMP_OUT" >/dev/null 2>&1 || {
         echo "<!-- Image $IMAGE_COUNT resize failed -->" >> "$OUTPUT.part$IMAGE_COUNT"
         rm -f "$TEMP_IN"
         exit 1
@@ -556,7 +528,7 @@ while IFS= read -r line; do
       BEFORE_SRC=$(echo "$line" | sed 's/\\(.*<img[^>]*\\)src="data:image[^"]*".*/\\1/')
       
       # Store just the filename (not full path) for portability
-      FILENAME="\${HTML_HASH}-img\${IMAGE_COUNT}.jpg"
+      FILENAME="\${HTML_HASH}-img\${IMAGE_COUNT}.webp"
       
       # Write the img tag with just filename to a part file
       echo "\${BEFORE_SRC}src=\\"\${FILENAME}\\">" > "$OUTPUT.part$IMAGE_COUNT"
@@ -1315,9 +1287,9 @@ async function cleanupCacheIfNeeded(): Promise<void> {
 
     // Quick check using metadata (instant!)
     let meta = readCacheMetadata();
-    
+
     // If no metadata or very outdated (>7 days), recalculate
-    if (!meta || (new Date().getTime() - new Date(meta.lastUpdated).getTime() > 7 * 24 * 60 * 60 * 1000)) {
+    if (!meta || new Date().getTime() - new Date(meta.lastUpdated).getTime() > 7 * 24 * 60 * 60 * 1000) {
       debugLog("📊 Recalculating cache metadata...");
       meta = recalculateCacheMetadata();
     }
@@ -1368,7 +1340,7 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     if (existsSync(imageCacheDir)) {
       const imageFiles = readdirSync(imageCacheDir);
       for (const file of imageFiles) {
-        if (!file.endsWith(".jpg")) continue;
+        if (!file.endsWith(".webp")) continue;
         const filePath = join(imageCacheDir, file);
         try {
           const stats = statSync(filePath);
@@ -1419,7 +1391,7 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     if (htmlHashesToDelete.size > 0 && existsSync(imageCacheDir)) {
       const allImages = readdirSync(imageCacheDir);
       for (const imageFile of allImages) {
-        // Image files are named like: {hash}-1.jpg, {hash}-2.jpg
+        // Image files are named like: {hash}-img1.webp, {hash}-img2.webp
         const imageHash = imageFile.split("-")[0];
         if (htmlHashesToDelete.has(imageHash)) {
           try {
