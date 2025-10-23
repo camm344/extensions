@@ -591,8 +591,9 @@ echo "END: $END - Processed $IMAGE_COUNT images in parallel" >&2
       const imageCacheDir = join(environment.supportPath, "image-cache");
       if (existsSync(imageCacheDir)) {
         const imageFiles = readdirSync(imageCacheDir);
-        const htmlHash = crypto.createHash("md5").update(readFileSync(inputPath, "utf-8")).digest("hex");
-
+        // Reuse the hash already computed at the top of the function (line 402)
+        // No need to re-read the entire file!
+        
         // Find all images created for this HTML hash
         const newImages = imageFiles.filter((file) => file.startsWith(htmlHash) && file.endsWith(".jpg"));
 
@@ -1310,6 +1311,7 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     let meta = readCacheMetadata();
 
     // If no metadata or very outdated (>7 days), recalculate
+    // Note: Caches created before the image metadata fix will need recalculation
     if (!meta || new Date().getTime() - new Date(meta.lastUpdated).getTime() > 7 * 24 * 60 * 60 * 1000) {
       debugLog("📊 Recalculating cache metadata...");
       meta = recalculateCacheMetadata();
