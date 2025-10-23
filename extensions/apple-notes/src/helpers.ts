@@ -450,6 +450,21 @@ done < "$INPUT"
         encoding: "utf-8",
       });
 
+      // Update metadata for cached images (they exist but weren't counted)
+      try {
+        const imageFiles = readdirSync(cacheDir);
+        const cachedImages = imageFiles.filter((file) => file.startsWith(cachePrefix) && file.endsWith(".jpg"));
+        
+        for (const imageFile of cachedImages) {
+          const imagePath = join(cacheDir, imageFile);
+          const stats = statSync(imagePath);
+          incrementCacheMetadata(stats.size);
+          debugLog(`📊 Added cached image to metadata: ${imageFile} (${(stats.size / 1024).toFixed(1)}KB)`);
+        }
+      } catch (error) {
+        debugLog(`Failed to update cached image metadata: ${error}`);
+      }
+
       fs.unlinkSync(scriptPath);
       return; // Done - used cache!
     }
@@ -593,7 +608,7 @@ echo "END: $END - Processed $IMAGE_COUNT images in parallel" >&2
         const imageFiles = readdirSync(imageCacheDir);
         // Reuse the hash already computed at the top of the function (line 402)
         // No need to re-read the entire file!
-        
+
         // Find all images created for this HTML hash
         const newImages = imageFiles.filter((file) => file.startsWith(htmlHash) && file.endsWith(".jpg"));
 
