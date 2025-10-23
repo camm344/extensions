@@ -592,10 +592,10 @@ echo "END: $END - Processed $IMAGE_COUNT images in parallel" >&2
       if (existsSync(imageCacheDir)) {
         const imageFiles = readdirSync(imageCacheDir);
         const htmlHash = crypto.createHash("md5").update(readFileSync(inputPath, "utf-8")).digest("hex");
-        
+
         // Find all images created for this HTML hash
-        const newImages = imageFiles.filter(file => file.startsWith(htmlHash) && file.endsWith(".jpg"));
-        
+        const newImages = imageFiles.filter((file) => file.startsWith(htmlHash) && file.endsWith(".jpg"));
+
         for (const imageFile of newImages) {
           const imagePath = join(imageCacheDir, imageFile);
           const stats = statSync(imagePath);

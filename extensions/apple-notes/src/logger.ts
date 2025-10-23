@@ -70,7 +70,8 @@ function rotateLogIfNeeded() {
       writeFileSync(logFile, rotatedContent);
     }
   } catch (error) {
-    debugLog(`Failed to rotate log: ${error}`);
+    // Use console.error to avoid recursion if debugLog fails
+    console.error(`Failed to rotate log: ${error}`);
   }
 }
 
@@ -97,7 +98,8 @@ export function debugLog(message: string) {
       rotateLogIfNeeded();
     }
   } catch (error) {
-    debugLog(`Failed to log message: ${error}`);
+    // Use console.error to avoid recursion if debugLog fails
+    console.error(`Failed to log message: ${error}`);
   }
 }
 
