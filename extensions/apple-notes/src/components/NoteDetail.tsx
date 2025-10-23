@@ -36,10 +36,10 @@ export default function NoteDetail({ note, isDeleted, mutate }: NoteDetailProps)
           const fs = await import("fs");
           const cachedHtml = fs.readFileSync(filePath, "utf-8");
 
-          // Detect if it's a large file cache by checking for .webp filenames
-          // Large file caches have just filenames (hash-img1.webp)
+          // Detect if it's a large file cache by checking for .jpg filenames
+          // Large file caches have just filenames (hash-img1.jpg)
           // Small file caches have original HTML with base64 data:image or no images
-          const hasFileUrls = cachedHtml.match(/<img[^>]*src=["']([a-f0-9]+-img\d+\.webp)["']/i);
+          const hasFileUrls = cachedHtml.match(/<img[^>]*src=["']([a-f0-9]+-img\d+\.jpg)["']/i);
 
           if (hasFileUrls) {
             // Large file cache - has filenames, reconstruct full paths
@@ -50,7 +50,7 @@ export default function NoteDetail({ note, isDeleted, mutate }: NoteDetailProps)
 
             // Convert filenames to full paths with URL encoding
             const processedHtml = cachedHtml.replace(
-              /<img[^>]*src=["']([a-f0-9]+-img\d+\.webp)["'][^>]*>/gi,
+              /<img[^>]*src=["']([a-f0-9]+-img\d+\.jpg)["'][^>]*>/gi,
               (match, filename) => {
                 // Reconstruct full path and URL encode
                 const fullPath = join(imageCacheDir, filename);

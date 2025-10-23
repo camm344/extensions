@@ -66,7 +66,7 @@ function recalculateCacheMetadata(): CacheMetadata {
   if (existsSync(imageCacheDir)) {
     const imageFiles = readdirSync(imageCacheDir);
     for (const file of imageFiles) {
-      if (!file.endsWith(".webp")) continue;
+      if (!file.endsWith(".jpg")) continue;
       try {
         const stats = statSync(join(imageCacheDir, file));
         totalSize += stats.size;
@@ -426,13 +426,13 @@ while IFS= read -r line; do
     IMAGE_COUNT=$((IMAGE_COUNT + 1))
     
     # Find cached file for this image index
-    CACHED_FILE="$CACHE_DIR/\${CACHE_PREFIX}img\${IMAGE_COUNT}.webp"
+    CACHED_FILE="$CACHE_DIR/\${CACHE_PREFIX}img\${IMAGE_COUNT}.jpg"
     
     if [ -f "$CACHED_FILE" ]; then
       # Extract everything before the <img tag
       BEFORE_IMG=$(echo "$line" | sed 's/<img.*//')
       # Store just the filename (not full path)
-      FILENAME="\${CACHE_PREFIX}img\${IMAGE_COUNT}.webp"
+      FILENAME="\${CACHE_PREFIX}img\${IMAGE_COUNT}.jpg"
       echo "\${BEFORE_IMG}<img src=\\"\${FILENAME}\\">" >> "$OUTPUT"
     else
       echo "<!-- Cached image $IMAGE_COUNT not found -->" >> "$OUTPUT"
@@ -496,7 +496,7 @@ while IFS= read -r line; do
       
       # Cache file based on HTML hash and image index
       TEMP_IN="$TEMP_DIR/raycast-shell-in-$IMAGE_COUNT.$IMAGE_TYPE"
-      TEMP_OUT="$CACHE_DIR/\${HTML_HASH}-img\${IMAGE_COUNT}.webp"
+      TEMP_OUT="$CACHE_DIR/\${HTML_HASH}-img\${IMAGE_COUNT}.jpg"
       
       START_DECODE=$(date +%s.%N)
       echo "$BASE64_DATA" | base64 -d > "$TEMP_IN" 2>/dev/null || {
@@ -510,9 +510,9 @@ while IFS= read -r line; do
       ORIG_SIZE=$(stat -f%z "$TEMP_IN" 2>/dev/null || echo "0")
       echo "  [$LINE_TIME] Decoded: $((ORIG_SIZE / 1024))KB in \${DECODE_TIME}s" >&2
       
-      # Resize with sips and convert to WebP (40% quality for better compression)
+      # Resize with sips and convert to JPEG (20% quality for max speed)
       START_RESIZE=$(date +%s.%N)
-      sips -Z "$MAX_WIDTH" -s format webp -s formatOptions 40 "$TEMP_IN" --out "$TEMP_OUT" >/dev/null 2>&1 || {
+      sips -Z "$MAX_WIDTH" -s format jpeg -s formatOptions 20 "$TEMP_IN" --out "$TEMP_OUT" >/dev/null 2>&1 || {
         echo "<!-- Image $IMAGE_COUNT resize failed -->" >> "$OUTPUT.part$IMAGE_COUNT"
         rm -f "$TEMP_IN"
         exit 1
@@ -528,7 +528,7 @@ while IFS= read -r line; do
       BEFORE_SRC=$(echo "$line" | sed 's/\\(.*<img[^>]*\\)src="data:image[^"]*".*/\\1/')
       
       # Store just the filename (not full path) for portability
-      FILENAME="\${HTML_HASH}-img\${IMAGE_COUNT}.webp"
+      FILENAME="\${HTML_HASH}-img\${IMAGE_COUNT}.jpg"
       
       # Write the img tag with just filename to a part file
       echo "\${BEFORE_SRC}src=\\"\${FILENAME}\\">" > "$OUTPUT.part$IMAGE_COUNT"
@@ -1340,7 +1340,7 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     if (existsSync(imageCacheDir)) {
       const imageFiles = readdirSync(imageCacheDir);
       for (const file of imageFiles) {
-        if (!file.endsWith(".webp")) continue;
+        if (!file.endsWith(".jpg")) continue;
         const filePath = join(imageCacheDir, file);
         try {
           const stats = statSync(filePath);
@@ -1391,7 +1391,7 @@ async function cleanupCacheIfNeeded(): Promise<void> {
     if (htmlHashesToDelete.size > 0 && existsSync(imageCacheDir)) {
       const allImages = readdirSync(imageCacheDir);
       for (const imageFile of allImages) {
-        // Image files are named like: {hash}-img1.webp, {hash}-img2.webp
+        // Image files are named like: {hash}-img1.jpg, {hash}-img2.jpg
         const imageHash = imageFile.split("-")[0];
         if (htmlHashesToDelete.has(imageHash)) {
           try {
